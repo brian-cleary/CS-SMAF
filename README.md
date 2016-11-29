@@ -4,10 +4,10 @@ This code accompanies the following publication and was used to generate results
 
 B Cleary, L Cong, E Lander, A Regev. "Composite measurements and molecular compressed sensing for highly efficient transcriptomics" (2016)
 
-While this code is not packaged as a proper pipeline, it contains several routines that we feel will be useful in broader research contexts. These are listed below.
+While this code is not packaged as a proper pipeline, it contains several routines that could be useful in broader research contexts. These are listed below.
 
 ## Sparse Module Activity Factorization (SMAF)
-Within our scripts SMAF is defined in union_of_transforms.py. However, since SMAF will likely have utility independent of compressed sensing contexts, we have also generated a dedicated file (smaf.py), with more detailed instructions for computing the factorization.
+Within our scripts SMAF is defined in union_of_transforms.py. However, since SMAF will likely have utility independent of compressed sensing contexts, we have also generated a dedicated file (run_smaf.py), with more detailed instructions for computing the factorization.
 
 ## Compressed recovery of gene expression with a known dictionary
 The general routine we used for simulating compressed sensing is as follows:
