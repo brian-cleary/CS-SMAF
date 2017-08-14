@@ -25,10 +25,31 @@ def random_phi(m,g,d_thresh=0.2,nonneg=False):
 		Phi[i] = p/np.linalg.norm(p)
 	return Phi
 
-def get_observations(X0,Phi,snr=5):
+def random_phi_subsets(m,g,n,d_thresh=0.2):
+	Phi = np.zeros((m,g))
+	Phi[0,np.random.choice(g,n,replace=False)] = n**-0.5
+	for i in range(1,m):
+		dmax = 1
+		while dmax > d_thresh:
+			p = np.zeros(g)
+			p[np.random.choice(g,n,replace=False)] = n**-0.5
+			dmax = Phi[:i].dot(p).max()
+		Phi[i] = p
+	return Phi
+
+def get_observations(X0,Phi,snr=5,return_noise=False):
 	noise = np.array([np.random.randn(X0.shape[1]) for _ in range(X0.shape[0])])
 	noise *= np.linalg.norm(X0)/np.linalg.norm(noise)/snr
-	return Phi.dot(X0 + noise)
+	if return_noise:
+		return Phi.dot(X0 + noise),noise
+	else:
+		return Phi.dot(X0 + noise)
+
+def coherence(U,m):
+	Phi = random_phi(m,U.shape[0])
+	PU = Phi.dot(U)
+	d = distance.pdist(PU.T,'cosine')
+	return abs(1-d)
 
 def sparse_decode(Y,D,k,worstFit=1.,mink=4):
 	while k > mink:
@@ -53,10 +74,13 @@ def update_sparse_predictions(Y,D,W,Psi,lda=0.0001):
 			X[:,i] = model.predict(Psi[:,used])
 	return X
 
-def recover_system_knownBasis(X0,m,k,Psi=[],use_ridge=False,snr=0,nsr_pool=0):
+def recover_system_knownBasis(X0,m,k,Psi=[],use_ridge=False,snr=0,nsr_pool=0,subset_size=0):
 	if len(Psi) == 0:
 		Psi,s,vt = np.linalg.svd(X0)
-	Phi = random_phi(m,X0.shape[0])
+	if subset_size == 0:
+		Phi = random_phi(m,X0.shape[0])
+	else:
+		Phi = random_phi_subsets(m,X0.shape[0],subset_size)
 	Phi_noise = random_phi(m,X0.shape[0])*nsr_pool
 	D = Phi.dot(Psi)
 	Y = get_observations(X0,Phi+Phi_noise,snr=snr)

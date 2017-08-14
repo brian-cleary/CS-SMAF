@@ -10,8 +10,8 @@ def compare_results(A,B):
 	results = list(correlations(A,B,0))[:-1]
 	results += list(compare_distances(A,B))
 	results += list(compare_distances(A.T,B.T))
-	#results += [compare_clusters(A,B,10)]
-	#results += [compare_clusters(A.T,B.T,4)]
+	#results += [compare_clusters(A,B)]
+	#results += [compare_clusters(A.T,B.T)]
 	return results
 
 THREADS = 10
@@ -21,7 +21,9 @@ THREADS = 10
 
 if __name__ == "__main__":
 	biased_training = 0.
-	opts, args = getopt.getopt(sys.argv[1:], 'i:m:s:d:t:g:n:r:b:', [])
+	composition_noise = 0.
+	subset_size = 0
+	opts, args = getopt.getopt(sys.argv[1:], 'i:m:s:d:t:g:n:r:b:a:', [])
 	for opt, arg in opts:
 		if opt == '-i':
 			data_path = arg
@@ -41,7 +43,11 @@ if __name__ == "__main__":
 			SNR = float(arg)
 		elif opt == '-b':
 			biased_training = float(arg)
-	#data_path,measurements,sparsity,dictionary_size,training_dictionary_fraction,max_genes,max_samples,SNR,biased_training = 'ImmGen/data.npy',25,15,0.5,0.05,5000,10000,2.,0.
+		elif opt == '-a':
+			composition_noise = float(arg)
+		elif opt == '-z':
+			subset_size = int(arg)
+	#data_path,measurements,sparsity,dictionary_size,training_dictionary_fraction,max_genes,max_samples,SNR,biased_training = 'GTEx/data.commonGenes.npy',100,15,0.5,0.05,5000,10000,2.,0.
 	X = np.load(data_path)
 	X0,xo,Xobs = random_submatrix(X,max_genes,max_samples,0)
 	# train bases
@@ -62,8 +68,8 @@ if __name__ == "__main__":
 		xi[np.random.choice(remaining_idx,training_dictionary_size-xi.sum(),replace=False)] = True
 	xa = X0[:,xi]
 	xb = X0[:,np.invert(xi)]
-	print 'data: %s measurements: %d, sparsity: %d, dictionary size: %d, training fraction: %.2f, genes: %d, samples: %d, SNR: %.1f, bias: %.1f' % (data_path,
-			measurements,sparsity,dictionary_size,training_dictionary_fraction,X0.shape[0],X0.shape[1],SNR,biased_training)\
+	print 'data: %s measurements: %d, sparsity: %d, dictionary size: %d, training fraction: %.2f, genes: %d, samples: %d, SNR: %.1f, bias: %.1f, composition_noise: %.2f, subset_size: %d' % (data_path,
+			measurements,sparsity,dictionary_size,training_dictionary_fraction,X0.shape[0],X0.shape[1],SNR,biased_training,composition_noise,subset_size)
 	Results = {}
 	ua,sa,vta = np.linalg.svd(xa,full_matrices=False)
 	ua = ua[:,:min(dictionary_size,xa.shape[1])]
@@ -71,19 +77,31 @@ if __name__ == "__main__":
 	Results['SVD (training)'] = compare_results(xa,x1a)
 	x1b,phi,y,w,d,psi = recover_system_knownBasis(xb,measurements,sparsity,Psi=ua,snr=SNR,use_ridge=False)
 	Results['SVD (testing)'] = compare_results(xb,x1b)
+	ua = ua[:,:min(sparsity,xa.shape[1])]
+	x1c,phi,y,w,d,psi = recover_system_knownBasis(xa,measurements,sparsity,Psi=ua,snr=SNR,use_ridge=False)
+	Results['k-SVD (training)'] = compare_results(xa,x1c)
+	x1d,phi,y,w,d,psi = recover_system_knownBasis(xb,measurements,sparsity,Psi=ua,snr=SNR,use_ridge=False)
+	Results['k-SVD (testing)'] = compare_results(xb,x1d)
 	ua,va = spams.nmf(np.asfortranarray(xa),return_lasso=True,K=dictionary_size,clean=True,numThreads=THREADS)
 	x2a,phi,y,w,d,psi = recover_system_knownBasis(xa,measurements,sparsity,Psi=ua,snr=SNR,use_ridge=False)
 	Results['sparse NMF (training)'] = compare_results(xa,x2a)
 	x2b,phi,y,w,d,psi = recover_system_knownBasis(xb,measurements,sparsity,Psi=ua,snr=SNR,use_ridge=False)
 	Results['sparse NMF (testing)'] = compare_results(xb,x2b)
 	Results['sparse NMF (sample_dist)'] = compare_distances(xb,y)
+	# Ideas for making this more sensitive to lowly expressed genes:
+	#	The root of the problem may be that the dictionary is biased towards high expression
+	#	(because the loss function in SMAF wasn't told to specifically care about lowly expressed genes)
+	#	So we might change the loss function to be sensitive to the average loss for each gene
+	#	...possibly normalized somehow so that we care the same about each gene individually
+	#	This may also help with the poor performance for each gene across tissues
+	#	In addition, we might weight Phi by a prior on (inverse) expression
+	#	Note that applying this weight without making the dictionary sensitive to low expression did not improve the results
 	k = min(int(xa.shape[1]*1.5),150)
 	UW = (np.random.random((xa.shape[0],k)),np.random.random((k,xa.shape[1])))
-	#ua,va = double_sparse_nmf(xa,k,0.06,0.0005,use_chol=True,maxItr=15,UW=UW,module_lower=xa.shape[0]/10,donorm=True)
 	ua,va = smaf(xa,k,5,0.0005,maxItr=10,use_chol=True,activity_lower=0.,module_lower=xa.shape[0]/10,UW=UW,donorm=True,mode=1,mink=3.)
 	x2a,phi,y,w,d,psi = recover_system_knownBasis(xa,measurements,sparsity,Psi=ua,snr=SNR,use_ridge=False)
 	Results['SMAF (training)'] = compare_results(xa,x2a)
-	x2b,phi,y,w,d,psi = recover_system_knownBasis(xb,measurements,sparsity,Psi=ua,snr=SNR,use_ridge=False)
+	x2b,phi,y,w,d,psi = recover_system_knownBasis(xb,measurements,sparsity,Psi=ua,snr=SNR,use_ridge=False,nsr_pool=composition_noise,subset_size=subset_size)
 	Results['SMAF (testing)'] = compare_results(xb,x2b)
 	sg = get_signature_genes(xa,measurements,lda=1000000)
 	model = build_signature_model(xa,sg)

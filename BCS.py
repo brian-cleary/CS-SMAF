@@ -169,7 +169,7 @@ if __name__ == "__main__":
 	U = np.zeros((X0.shape[0],0))
 	W = np.zeros((0,X0.shape[1]))
 	dict_lda = 50.0
-	# for full data:
+	# for full data (g=14202):
 	#dict_lda = 5000.
 	for c in set(lA):
 		cidx = np.where(lA == c)[0]

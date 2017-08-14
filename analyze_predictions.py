@@ -1,23 +1,28 @@
 import numpy as np
 from scipy.spatial import distance
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, pearsonr
 from sklearn.metrics import adjusted_rand_score,adjusted_mutual_info_score
 from sklearn.cluster import SpectralClustering, AffinityPropagation
 
-def compare_distances(A,B,random_samples=[],s=200):
+def compare_distances(A,B,random_samples=[],s=200,pvalues=False):
 	if len(random_samples) == 0:
 		random_samples = np.zeros(A.shape[1],dtype=np.bool)
 		random_samples[:min(s,A.shape[1])] = True
 		np.random.shuffle(random_samples)
 	dist_x = distance.pdist(A[:,random_samples].T,'euclidean')
 	dist_y = distance.pdist(B[:,random_samples].T,'euclidean')
-	p = (1 - distance.correlation(dist_x,dist_y))
+	pear = pearsonr(dist_x,dist_y)
 	spear = spearmanr(dist_x,dist_y)
-	return p,spear[0]
+	if pvalues:
+		return pear,spear
+	else:
+		return pear[0],spear[0]
 
 def compare_clusters(X,Y,method='spectral',s=10000):
 	A = (X/np.linalg.norm(X,axis=0)).T
+	A[np.isnan(A)] = 0
 	B = (Y/np.linalg.norm(Y,axis=0)).T
+	B[np.isnan(B)] = 0
 	random_samples = np.zeros(A.shape[0],dtype=np.bool)
 	random_samples[:min(s,A.shape[0])] = True
 	np.random.shuffle(random_samples)
